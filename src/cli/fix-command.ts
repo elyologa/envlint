@@ -57,5 +57,6 @@ export async function runFixCommand(args: FixCommandArgs): Promise<number> {
     console.log('Run without --dry-run to apply changes.');
   }
 
-  return fixResult.addedKeys.length > 0 ? 0 : 1;
+  // Return 0 if fixes were applied or previewed, 1 if nothing could be fixed
+  return fixResult.addedKeys.length > 0 || fixResult.skippedKeys.length === 0 ? 0 : 1;
 }
