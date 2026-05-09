@@ -43,6 +43,12 @@ describe('generateReport', () => {
     expect(report.warnings).toContain('[API_KEY] OK');
   });
 
+  it('does not include OK messages when verbose=false', () => {
+    const results = [makeResult('API_KEY', true)];
+    const report = generateReport('.env', results, { verbose: false });
+    expect(report.warnings).not.toContain('[API_KEY] OK');
+  });
+
   it('summary reflects failure state', () => {
     const results = [
       makeResult('DB_URL', false, [{ message: 'missing required key', severity: 'error' }]),
@@ -50,6 +56,12 @@ describe('generateReport', () => {
     const report = generateReport('.env.production', results);
     expect(report.summary).toMatch(/failed validation/);
     expect(report.summary).toMatch(/.env.production/);
+  });
+
+  it('summary reflects passing state', () => {
+    const results = [makeResult('PORT', true), makeResult('HOST', true)];
+    const report = generateReport('.env', results);
+    expect(report.summary).toMatch(/passed/);
   });
 });
 
