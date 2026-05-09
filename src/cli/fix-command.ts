@@ -39,7 +39,14 @@ export async function runFixCommand(args: FixCommandArgs): Promise<number> {
   let envVars: Record<string, string>;
   try {
     envVars = loadEnvFile(args.envPath);
-  } catch {
+  } catch (err) {
+    // If the env file doesn't exist, treat it as empty and let the fixer create it.
+    // Re-throw unexpected errors (e.g. permission denied).
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== 'ENOENT') {
+      console.error(`Error loading env file: ${(err as Error).message}`);
+      return 1;
+    }
     envVars = {};
   }
 
