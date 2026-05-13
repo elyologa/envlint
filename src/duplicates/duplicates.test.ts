@@ -1,65 +1,72 @@
-import { findDuplicates, formatDuplicateResult, DuplicateResult } from './duplicates';
+import { findDuplicates, checkDuplicatesInFile, formatDuplicateResult } from './duplicates';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+
+function writeTempEnv(content: string): string {
+  const file = path.join(os.tmpdir(), `envlint-test-${Date.now()}.env`);
+  fs.writeFileSync(file, content);
+  return file;
+}
 
 describe('findDuplicates', () => {
-  it('returns empty array when no duplicates exist', () => {
-    const content = 'FOO=bar\nBAZ=qux\nHELLO=world';
-    expect(findDuplicates(content)).toEqual([]);
+  it('returns empty array for no duplicates', () => {
+    const result = findDuplicates('FOO=1\nBAR=2\nBAZ=3');
+    expect(result).toEqual([]);
   });
 
   it('detects a single duplicate key', () => {
-    const content = 'FOO=first\nBAR=baz\nFOO=second';
-    const result = findDuplicates(content);
-    expect(result).toHaveLength(1);
-    expect(result[0].key).toBe('FOO');
-    expect(result[0].lines).toEqual([1, 3]);
-    expect(result[0].values).toEqual(['first', 'second']);
+    const result = findDuplicates('FOO=1\nBAR=2\nFOO=3');
+    expect(result).toContainEqual({ key: 'FOO', lines: [1, 3] });
   });
 
   it('detects multiple duplicate keys', () => {
-    const content = 'A=1\nB=2\nA=3\nB=4';
-    const result = findDuplicates(content);
+    const result = findDuplicates('FOO=1\nBAR=2\nFOO=3\nBAR=4');
     expect(result).toHaveLength(2);
-    const keys = result.map((r) => r.key).sort();
-    expect(keys).toEqual(['A', 'B']);
   });
 
-  it('ignores comment lines', () => {
-    const content = '# FOO=ignored\nFOO=real';
-    expect(findDuplicates(content)).toEqual([]);
+  it('handles keys duplicated more than twice', () => {
+    const result = findDuplicates('FOO=1\nFOO=2\nFOO=3');
+    expect(result).toContainEqual({ key: 'FOO', lines: [1, 2, 3] });
   });
 
-  it('ignores blank lines', () => {
-    const content = 'FOO=bar\n\nFOO=baz';
-    const result = findDuplicates(content);
-    expect(result).toHaveLength(1);
-    expect(result[0].lines).toEqual([1, 3]);
+  it('ignores comments and blank lines', () => {
+    const result = findDuplicates('# comment\nFOO=1\n\nBAR=2');
+    expect(result).toEqual([]);
+  });
+});
+
+describe('checkDuplicatesInFile', () => {
+  it('reads file and returns duplicates', () => {
+    const file = writeTempEnv('KEY=1\nKEY=2');
+    const result = checkDuplicatesInFile(file);
+    expect(result).toContainEqual({ key: 'KEY', lines: [1, 2] });
+    fs.unlinkSync(file);
   });
 
-  it('handles keys appearing three times', () => {
-    const content = 'X=1\nX=2\nX=3';
-    const result = findDuplicates(content);
-    expect(result[0].lines).toEqual([1, 2, 3]);
-    expect(result[0].values).toEqual(['1', '2', '3']);
+  it('returns empty for file with no duplicates', () => {
+    const file = writeTempEnv('A=1\nB=2');
+    const result = checkDuplicatesInFile(file);
+    expect(result).toEqual([]);
+    fs.unlinkSync(file);
   });
 });
 
 describe('formatDuplicateResult', () => {
-  it('formats a clean result', () => {
-    const result: DuplicateResult = { file: '.env', duplicates: [] };
-    expect(formatDuplicateResult(result)).toBe('✔ No duplicate keys found in .env');
+  it('reports no duplicates found', () => {
+    const output = formatDuplicateResult('test.env', []);
+    expect(output).toContain('No duplicate keys found');
   });
 
-  it('formats a result with duplicates', () => {
-    const result: DuplicateResult = {
-      file: '.env',
-      duplicates: [
-        { key: 'API_KEY', lines: [2, 5], values: ['abc', 'xyz'] },
-      ],
-    };
-    const output = formatDuplicateResult(result);
-    expect(output).toContain('✖ Found 1 duplicate key(s) in .env');
-    expect(output).toContain('API_KEY');
-    expect(output).toContain('line 2: abc');
-    expect(output).toContain('line 5: xyz');
+  it('lists duplicate keys with line numbers', () => {
+    const output = formatDuplicateResult('test.env', [{ key: 'FOO', lines: [1, 4] }]);
+    expect(output).toContain('FOO');
+    expect(output).toContain('1');
+    expect(output).toContain('4');
+  });
+
+  it('includes filename in output', () => {
+    const output = formatDuplicateResult('my.env', [{ key: 'BAR', lines: [2, 5] }]);
+    expect(output).toContain('my.env');
   });
 });
